@@ -1,4 +1,4 @@
-name: Build and publish Docker image
+name: Build and publish Docker images
 
 on:
   push:
@@ -14,10 +14,11 @@ permissions:
 
 jobs:
   docker:
+    name: Build and publish GHCR images
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up QEMU
@@ -33,22 +34,48 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Docker metadata
-        id: meta
+      - name: Generate Fan UI image metadata
+        id: meta_ui
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/rickdb/truenas-fan-ui
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha
+            type=sha,prefix=sha-
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      - name: Build and push
+      - name: Generate IT87 loader image metadata
+        id: meta_it87
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/rickdb/truenas-fan-ui-it87-loader
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push Fan UI image
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ./Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta_ui.outputs.tags }}
+          labels: ${{ steps.meta_ui.outputs.labels }}
+          cache-from: type=gha,scope=fan-ui
+          cache-to: type=gha,mode=max,scope=fan-ui
+
+      - name: Build and push IT87 loader image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./it87-loader/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta_it87.outputs.tags }}
+          labels: ${{ steps.meta_it87.outputs.labels }}
+          cache-from: type=gha,scope=it87-loader
+          cache-to: type=gha,mode=max,scope=it87-loader

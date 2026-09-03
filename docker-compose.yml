@@ -1,9 +1,46 @@
 services:
+  # Builds the out-of-tree it87 driver at runtime against the exact
+  # TrueNAS host kernel headers, then loads it into the shared host kernel.
+  # This is required on boards such as the Gigabyte X399 DESIGNARE EX where
+  # the stock TrueNAS kernel does not expose the ITE IT8686E/IT8792E fans.
+  it87-loader:
+    image: ghcr.io/rickdb/truenas-fan-ui-it87-loader:latest
+    container_name: truenas-fan-it87-loader
+    restart: unless-stopped
+    privileged: true
+
+    environment:
+      IT87_IGNORE_RESOURCE_CONFLICT: "1"
+      IT87_CACHE_DIR: /module-cache
+
+    volumes:
+      # Exact host kernel headers/module metadata. Read-only is sufficient.
+      - /lib/modules:/lib/modules:ro
+      - /usr/src:/usr/src:ro
+
+      # Host sysfs is used for post-load hwmon discovery.
+      - /sys:/sys:rw
+
+      # Cache the compiled .ko so normal container restarts do not rebuild it.
+      # A kernel or it87 source revision change automatically gets a new cache.
+      - /mnt/nvme-apps/truenas-fan-ui/it87-cache:/module-cache
+
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q '^it87 ' /proc/modules"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 5s
+
   truenas-fan-ui:
     image: ghcr.io/rickdb/truenas-fan-ui:latest
     container_name: truenas-fan-ui
     restart: unless-stopped
     privileged: true
+
+    depends_on:
+      it87-loader:
+        condition: service_started
 
     ports:
       - "8188:8080"
@@ -12,6 +49,12 @@ services:
       SYSFS_ROOT: /host/sys
       CONFIG_PATH: /config/config.json
       LISTEN_ADDR: :8080
+
+      # Prevent startup-profile restoration from racing the runtime it87 build.
+      # The app waits for the module, but starts after the timeout even if the
+      # helper failed so the UI remains available for diagnostics.
+      WAIT_FOR_IT87: "1"
+      IT87_WAIT_TIMEOUT: "90"
 
     volumes:
       # Host hwmon/sysfs. RW is required for PWM control.

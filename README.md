@@ -170,3 +170,61 @@ docker compose up -d
 ```
 
 If GHCR returns `permission_denied: write_package`, open **Repository Settings → Actions → General → Workflow permissions** and enable **Read and write permissions** for `GITHUB_TOKEN`.
+
+## Integrated IT87 runtime driver loader
+
+Some desktop/workstation motherboards do not expose their fan headers through the stock TrueNAS kernel. The Gigabyte **X399 DESIGNARE EX** is one such case: `sensors-detect` identifies an **ITE IT8686E** at `0xa40` and an **ITE IT8792E** at `0xa60`, while the stock TrueNAS hwmon tree may only expose unrelated devices such as `i915`.
+
+The production Compose stack therefore includes an optional-but-enabled `it87-loader` helper container. It uses the maintained `frankcrawford/it87` driver source baked into its GHCR image, then at container startup:
+
+1. reads the running TrueNAS kernel version with `uname -r`;
+2. verifies the matching host headers at `/lib/modules/<kernel>/build`;
+3. compiles `it87.ko` **inside the container**, not on the TrueNAS host;
+4. caches the compiled module under `/mnt/nvme-apps/truenas-fan-ui/it87-cache`;
+5. loads it into the shared host kernel with `ignore_resource_conflict=1`;
+6. stays alive so Docker's restart policy causes it to load the module again after a TrueNAS reboot.
+
+The helper image is published as:
+
+```text
+ghcr.io/rickdb/truenas-fan-ui-it87-loader:latest
+```
+
+The normal UI remains:
+
+```text
+ghcr.io/rickdb/truenas-fan-ui:latest
+```
+
+The UI container waits up to 90 seconds for `it87` before starting. This prevents the saved startup fan profile from being applied before the motherboard PWM channels exist. If the driver fails to build/load, the timeout expires and the UI still starts for diagnostics.
+
+### Required TrueNAS host paths
+
+The loader expects the host to provide matching kernel headers, for example:
+
+```text
+/lib/modules/6.12.95-production+truenas/build -> /usr/src/linux-headers-truenas-production-amd64
+```
+
+The Compose mounts `/lib/modules` and `/usr/src` read-only. No compiler, `make`, DKMS, or development packages are installed on the TrueNAS host.
+
+### Check the loader
+
+```bash
+docker compose logs -f it87-loader
+```
+
+Then verify the host sees the ITE controller(s):
+
+```bash
+for h in /sys/class/hwmon/hwmon*; do
+  echo "===== $h / $(cat "$h/name" 2>/dev/null) ====="
+  ls -1 "$h" | grep -E '^(fan|pwm)'
+done
+```
+
+Once `it86*` / `it87*` devices appear, Fan Commander discovers the new `fanN_input` and `pwmN` channels automatically.
+
+### Safety
+
+Loading an out-of-tree kernel module is inherently more invasive than ordinary container workloads. The helper therefore requires `privileged: true`. `ignore_resource_conflict=1` is enabled for this Gigabyte/ITE use case because firmware resource reservations can otherwise block the driver. If the driver behaves incorrectly on different hardware, stop the stack and unload it with `sudo modprobe -r it87` (provided nothing is using it).
