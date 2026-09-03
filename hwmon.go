@@ -22,21 +22,23 @@ var (
 )
 
 type Fan struct {
-	ID             string `json:"id"`
-	Index          int    `json:"index"`
-	Name           string `json:"name"`
-	DefaultName    string `json:"default_name"`
-	Chip           string `json:"chip"`
-	Device         string `json:"device"`
-	RPM            *int   `json:"rpm,omitempty"`
-	PWM            *int   `json:"pwm,omitempty"`
-	Percent        *int   `json:"percent,omitempty"`
-	PWMMode        *int   `json:"pwm_mode,omitempty"`
-	PWMPath        string `json:"-"`
-	PWMEnablePath  string `json:"-"`
-	Writable       bool   `json:"writable"`
-	ModeWritable   bool   `json:"mode_writable"`
-	CanRestoreMode bool   `json:"can_restore_mode"`
+	ID               string `json:"id"`
+	Index            int    `json:"index"`
+	Name             string `json:"name"`
+	DefaultName      string `json:"default_name"`
+	Chip             string `json:"chip"`
+	Device           string `json:"device"`
+	RPM              *int   `json:"rpm,omitempty"`
+	PWM              *int   `json:"pwm,omitempty"`
+	Percent          *int   `json:"percent,omitempty"`
+	PWMMode          *int   `json:"pwm_mode,omitempty"`
+	PWMPath          string `json:"-"`
+	PWMEnablePath    string `json:"-"`
+	Writable         bool   `json:"writable"`
+	ModeWritable     bool   `json:"mode_writable"`
+	CanRestoreMode   bool   `json:"can_restore_mode"`
+	CustomPercent    *int   `json:"custom_percent,omitempty"`
+	RestoreOnStartup bool   `json:"restore_on_startup"`
 }
 
 type Temperature struct {
@@ -156,6 +158,11 @@ func (m *FanManager) Scan() (Snapshot, error) {
 			}
 
 			fan := Fan{ID: id, Index: idx, Name: name, DefaultName: label, Chip: chip, Device: deviceID}
+			if fp, ok := cfg.FanProfiles[id]; ok {
+				pct := fp.Percent
+				fan.CustomPercent = &pct
+				fan.RestoreOnStartup = fp.RestoreOnStartup
+			}
 			if v, err := readInt(filepath.Join(hw, fmt.Sprintf("fan%d_input", idx))); err == nil {
 				fan.RPM = v
 			}
@@ -306,6 +313,11 @@ func (m *FanManager) findFanUnlocked(id string) (Fan, error) {
 				name = alias
 			}
 			fan := Fan{ID: fid, Index: idx, Name: name, DefaultName: label, Chip: chip, Device: deviceID}
+			if fp, ok := cfg.FanProfiles[fid]; ok {
+				pct := fp.Percent
+				fan.CustomPercent = &pct
+				fan.RestoreOnStartup = fp.RestoreOnStartup
+			}
 			if v, err := readInt(filepath.Join(hw, fmt.Sprintf("fan%d_input", idx))); err == nil {
 				fan.RPM = v
 			}
@@ -389,6 +401,27 @@ func (m *FanManager) ApplyProfile(name string) error {
 		return fmt.Errorf("profile applied to %d fan(s), but some failed: %s", changed, strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+func (m *FanManager) ApplyStartupFanProfiles() (int, []string) {
+	cfg := m.cfg.Snapshot()
+	if len(cfg.FanProfiles) == 0 {
+		return 0, nil
+	}
+
+	applied := 0
+	var errs []string
+	for id, fp := range cfg.FanProfiles {
+		if !fp.RestoreOnStartup {
+			continue
+		}
+		if err := m.SetPercent(id, fp.Percent); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", id, err))
+			continue
+		}
+		applied++
+	}
+	return applied, errs
 }
 
 func (m *FanManager) RestoreAll() error {

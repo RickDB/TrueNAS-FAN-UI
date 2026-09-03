@@ -126,6 +126,58 @@ func (a *App) restoreFan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
+func (a *App) setFanProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/api/fans/")
+	id = strings.TrimSuffix(id, "/profile")
+	if id == "" {
+		writeErr(w, 400, fmt.Errorf("missing fan id"))
+		return
+	}
+	if _, err := a.fans.findFan(id); err != nil {
+		writeErr(w, 404, err)
+		return
+	}
+
+	if r.Method == http.MethodDelete {
+		if err := a.cfg.DeleteFanProfile(id); err != nil {
+			writeErr(w, 500, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true})
+		return
+	}
+
+	var req struct {
+		Percent          int  `json:"percent"`
+		RestoreOnStartup bool `json:"restore_on_startup"`
+		ApplyNow         bool `json:"apply_now"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErr(w, 400, err)
+		return
+	}
+	cfg := a.cfg.Snapshot()
+	if req.Percent < cfg.MinPercent || req.Percent > 100 {
+		writeErr(w, 400, fmt.Errorf("percent must be between %d and 100", cfg.MinPercent))
+		return
+	}
+	if req.ApplyNow {
+		if err := a.fans.SetPercent(id, req.Percent); err != nil {
+			writeErr(w, 400, err)
+			return
+		}
+	}
+	if err := a.cfg.SetFanProfile(id, req.Percent, req.RestoreOnStartup); err != nil {
+		writeErr(w, 500, err)
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
 func (a *App) fanRouter(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.HasSuffix(r.URL.Path, "/name"):
@@ -134,6 +186,8 @@ func (a *App) fanRouter(w http.ResponseWriter, r *http.Request) {
 		a.setPWM(w, r)
 	case strings.HasSuffix(r.URL.Path, "/restore"):
 		a.restoreFan(w, r)
+	case strings.HasSuffix(r.URL.Path, "/profile"):
+		a.setFanProfile(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -208,6 +262,15 @@ func main() {
 	// startup deliberately leaves the motherboard/kernel fan state untouched.
 	app.applyStartupProfile()
 
+	// Per-fan startup profiles run after the global profile so they can
+	// intentionally override it for selected headers.
+	if applied, errs := app.fans.ApplyStartupFanProfiles(); applied > 0 || len(errs) > 0 {
+		log.Printf("startup: restored %d per-fan custom profile(s)", applied)
+		for _, msg := range errs {
+			log.Printf("startup: per-fan profile failed: %s", msg)
+		}
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/status", app.status)
 	mux.HandleFunc("/api/profile", app.profile)
@@ -222,7 +285,7 @@ func main() {
 	mux.Handle("/", http.FileServer(http.FS(static)))
 
 	server := &http.Server{Addr: listen, Handler: logMiddleware(mux), ReadHeaderTimeout: 5 * time.Second}
-	log.Printf("TrueNAS Fan UI listening on %s (sysfs=%s config=%s)", listen, root, cfgPath)
+	log.Printf("Only Fans - TrueNAS Edition listening on %s (sysfs=%s config=%s)", listen, root, cfgPath)
 	log.Fatal(server.ListenAndServe())
 }
 

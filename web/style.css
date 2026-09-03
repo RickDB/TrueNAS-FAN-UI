@@ -96,3 +96,48 @@ input[type=range] { width:100%; accent-color:var(--accent); }
 .toast.error { border-color:rgba(255,111,125,.45); }
 @media (max-width:1000px){ .hero-grid{grid-template-columns:repeat(2,1fr);} }
 @media (max-width:650px){ .shell{width:min(100% - 22px,1500px);padding-top:20px}.topbar{flex-direction:column}.hero-grid{grid-template-columns:1fr}.fan-grid{grid-template-columns:1fr}.section-heading{align-items:flex-start}.profiles-panel .section-heading{flex-direction:column}.profile-btn{flex:1 1 45%} }
+
+
+/* Fans sit directly below global profiles. Temperatures stay compact by default. */
+.temp-heading-actions { display:flex; align-items:center; gap:10px; }
+.temp-grid { grid-auto-rows:82px; }
+.temp-card { min-height:82px; }
+.temp-grid.collapsed {
+  max-height:174px;
+  overflow:hidden;
+  position:relative;
+}
+.temp-grid.collapsed::after {
+  content:"";
+  position:absolute;
+  left:0; right:0; bottom:0;
+  height:20px;
+  pointer-events:none;
+  background:linear-gradient(transparent, rgba(18,25,36,.9));
+}
+.startup-toggle {
+  margin-top:12px;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  color:#b9c7da;
+  font-size:11px;
+  cursor:pointer;
+}
+.startup-toggle input {
+  width:16px;
+  height:16px;
+  accent-color:var(--accent);
+}
+.fan-action-group {
+  display:flex;
+  gap:7px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+.clear-profile { font-size:11px; }
+@media (max-width:650px) {
+  .temp-heading-actions { align-items:flex-end; flex-direction:column; gap:6px; }
+  .control-actions { align-items:flex-start; flex-direction:column; }
+  .fan-action-group { justify-content:flex-start; }
+}

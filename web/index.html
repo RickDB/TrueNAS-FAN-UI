@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>TrueNAS Fan Commander</title>
+  <title>Only Fans - TrueNAS Edition</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <header class="topbar">
       <div>
         <div class="eyebrow">TRUENAS // HWMON CONTROL</div>
-        <h1>Fan Commander</h1>
+        <h1>Only Fans - TrueNAS Edition</h1>
         <p class="subtitle">Live thermals, RPM telemetry and PWM control from one bridge.</p>
       </div>
       <div class="status-pill"><span id="statusDot" class="dot"></span><span id="statusText">Connecting</span></div>
@@ -49,13 +49,6 @@
       <div class="warning">Changing a profile switches every writable PWM channel to manual control. Use a profile that keeps enough airflow for your disks and CPU.</div>
     </section>
 
-    <section class="panel">
-      <div class="section-heading">
-        <div><div class="eyebrow">THERMAL ARRAY</div><h2>Temperatures</h2></div>
-        <div class="timestamp" id="updatedAt">—</div>
-      </div>
-      <div id="temps" class="temp-grid"><div class="empty">Scanning sensors…</div></div>
-    </section>
 
     <section class="panel">
       <div class="section-heading">
@@ -64,6 +57,18 @@
       </div>
       <div id="fans" class="fan-grid"><div class="empty">Scanning hwmon…</div></div>
     </section>
+
+    <section class="panel temperatures-panel">
+      <div class="section-heading">
+        <div><div class="eyebrow">THERMAL ARRAY</div><h2>Temperatures</h2></div>
+        <div class="temp-heading-actions">
+          <div class="timestamp" id="updatedAt">—</div>
+          <button class="ghost" id="toggleTemps">Show all</button>
+        </div>
+      </div>
+      <div id="temps" class="temp-grid collapsed"><div class="empty">Scanning sensors…</div></div>
+    </section>
+
   </div>
 
   <div id="toast" class="toast"></div>

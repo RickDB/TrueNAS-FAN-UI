@@ -8,11 +8,17 @@ import (
 	"sync"
 )
 
+type FanProfile struct {
+	Percent          int  `json:"percent"`
+	RestoreOnStartup bool `json:"restore_on_startup"`
+}
+
 type Config struct {
-	Aliases     map[string]string `json:"aliases"`
-	Profiles    map[string]int    `json:"profiles"`
-	LastProfile string            `json:"last_profile,omitempty"`
-	MinPercent  int               `json:"min_percent"`
+	Aliases     map[string]string     `json:"aliases"`
+	Profiles    map[string]int        `json:"profiles"`
+	FanProfiles map[string]FanProfile `json:"fan_profiles,omitempty"`
+	LastProfile string                `json:"last_profile,omitempty"`
+	MinPercent  int                   `json:"min_percent"`
 }
 
 type ConfigStore struct {
@@ -23,7 +29,8 @@ type ConfigStore struct {
 
 func defaultConfig() Config {
 	return Config{
-		Aliases: map[string]string{},
+		Aliases:     map[string]string{},
+		FanProfiles: map[string]FanProfile{},
 		Profiles: map[string]int{
 			"quiet":       40,
 			"balanced":    55,
@@ -64,6 +71,9 @@ func (s *ConfigStore) load() error {
 	if cfg.Profiles == nil {
 		cfg.Profiles = defaultConfig().Profiles
 	}
+	if cfg.FanProfiles == nil {
+		cfg.FanProfiles = map[string]FanProfile{}
+	}
 	if cfg.MinPercent < 1 || cfg.MinPercent > 100 {
 		cfg.MinPercent = 30
 	}
@@ -84,6 +94,10 @@ func (s *ConfigStore) Snapshot() Config {
 	for k, v := range s.cfg.Profiles {
 		out.Profiles[k] = v
 	}
+	out.FanProfiles = make(map[string]FanProfile, len(s.cfg.FanProfiles))
+	for k, v := range s.cfg.FanProfiles {
+		out.FanProfiles[k] = v
+	}
 	return out
 }
 
@@ -95,6 +109,30 @@ func (s *ConfigStore) SetAlias(id, name string) error {
 	} else {
 		s.cfg.Aliases[id] = name
 	}
+	return s.saveLocked()
+}
+
+func (s *ConfigStore) SetFanProfile(id string, percent int, restoreOnStartup bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if percent < s.cfg.MinPercent || percent > 100 {
+		return errors.New("fan profile percentage outside configured safety range")
+	}
+	if s.cfg.FanProfiles == nil {
+		s.cfg.FanProfiles = map[string]FanProfile{}
+	}
+	s.cfg.FanProfiles[id] = FanProfile{
+		Percent:          percent,
+		RestoreOnStartup: restoreOnStartup,
+	}
+	return s.saveLocked()
+}
+
+func (s *ConfigStore) DeleteFanProfile(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.cfg.FanProfiles, id)
 	return s.saveLocked()
 }
 

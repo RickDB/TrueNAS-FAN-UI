@@ -1,4 +1,7 @@
-# TrueNAS Fan Commander
+# Only Fans - TrueNAS Edition
+
+Control your fans. Keep your disks cool.
+
 
 A small Go web application for TrueNAS SCALE that monitors Linux `hwmon` fan RPM/temperatures and controls writable PWM channels through sysfs. No IPMI/BMC is used.
 
@@ -76,6 +79,17 @@ volumes:
 ```
 
 Do **not** expose this web UI directly to the public Internet. Anyone who can access it can change fan speeds.
+
+## Per-fan custom profiles
+
+Each writable fan can save its own PWM percentage. Enable **Restore this custom profile on app startup** for any fan that should override the global startup profile.
+
+Startup order:
+
+1. Apply the last saved global profile, if one exists.
+2. Apply opted-in per-fan custom profiles as overrides.
+
+This lets most fans follow a global profile while, for example, HDD intake fans keep a higher fixed airflow.
 
 ## Fan naming
 
@@ -223,7 +237,7 @@ for h in /sys/class/hwmon/hwmon*; do
 done
 ```
 
-Once `it86*` / `it87*` devices appear, Fan Commander discovers the new `fanN_input` and `pwmN` channels automatically.
+Once `it86*` / `it87*` devices appear, Only Fans - TrueNAS Edition discovers the new `fanN_input` and `pwmN` channels automatically.
 
 ### Safety
 
