@@ -147,3 +147,26 @@ curl -X POST http://127.0.0.1:8188/api/fans/FAN_ID/name \
   -H 'Content-Type: application/json' \
   -d '{"name":"Front HDD Intake"}'
 ```
+
+## GitHub Container Registry / GHCR
+
+The repository includes `.github/workflows/docker-publish.yml`. Every push to `main` builds and publishes a multi-architecture image for `linux/amd64` and `linux/arm64`.
+
+The normal TrueNAS deployment image is:
+
+```text
+ghcr.io/rickdb/truenas-fan-ui:latest
+```
+
+A Git tag such as `v0.1.0` also produces versioned tags such as `0.1.0` and `0.1`.
+
+The included production `docker-compose.yml` pulls the GHCR image directly and intentionally contains no `build:` entry.
+
+After pushing the initial repository contents, check **GitHub → Actions → Build and publish Docker image**. Once that job completes successfully, deploy or refresh TrueNAS with:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+If GHCR returns `permission_denied: write_package`, open **Repository Settings → Actions → General → Workflow permissions** and enable **Read and write permissions** for `GITHUB_TOKEN`.

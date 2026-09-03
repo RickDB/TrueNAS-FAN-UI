@@ -1,0 +1,11 @@
+# Local build output
+/truenas-fan-ui
+
+# Local configuration / secrets
+/config/
+config.json
+
+# Editor / OS clutter
+.DS_Store
+*.swp
+*.tmp
