@@ -1,0 +1,24 @@
+services:
+  truenas-fan-ui:
+    build: .
+    image: truenas-fan-ui:local
+    container_name: truenas-fan-ui
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "8188:8080"
+    environment:
+      SYSFS_ROOT: /host/sys
+      CONFIG_PATH: /config/config.json
+      LISTEN_ADDR: :8080
+    volumes:
+      # Host hwmon/sysfs. RW is required for PWM control.
+      - /sys:/host/sys:rw
+      # Change this to your preferred persistent TrueNAS dataset.
+      - /mnt/nvme-apps/truenas-fan-ui:/config
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s

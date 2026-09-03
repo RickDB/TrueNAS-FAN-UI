@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>TrueNAS Fan Commander</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">TRUENAS // HWMON CONTROL</div>
+        <h1>Fan Commander</h1>
+        <p class="subtitle">Live thermals, RPM telemetry and PWM control from one bridge.</p>
+      </div>
+      <div class="status-pill"><span id="statusDot" class="dot"></span><span id="statusText">Connecting</span></div>
+    </header>
+
+    <section class="hero-grid">
+      <article class="hero-card accent">
+        <div class="hero-label">Fans detected</div>
+        <div class="hero-value" id="fanCount">—</div>
+        <div class="hero-foot" id="writableCount">— controllable</div>
+      </article>
+      <article class="hero-card">
+        <div class="hero-label">Highest temperature</div>
+        <div class="hero-value"><span id="maxTemp">—</span><small>°C</small></div>
+        <div class="hero-foot" id="maxTempLabel">Waiting for sensors</div>
+      </article>
+      <article class="hero-card">
+        <div class="hero-label">Average fan speed</div>
+        <div class="hero-value"><span id="avgRpm">—</span><small>RPM</small></div>
+        <div class="hero-foot">Live 2-second polling</div>
+      </article>
+      <article class="hero-card">
+        <div class="hero-label">Active profile</div>
+        <div class="hero-value profile-value" id="activeProfile">Manual</div>
+        <div class="hero-foot">Safety floor <span id="minPercent">—</span>%</div>
+      </article>
+    </section>
+
+    <section class="panel profiles-panel">
+      <div class="section-heading">
+        <div><div class="eyebrow">GLOBAL CONTROL</div><h2>Profiles</h2></div>
+        <button class="ghost danger" id="restoreAll">Restore startup modes</button>
+      </div>
+      <div id="profiles" class="profile-buttons"></div>
+      <div class="warning">Changing a profile switches every writable PWM channel to manual control. Use a profile that keeps enough airflow for your disks and CPU.</div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div><div class="eyebrow">THERMAL ARRAY</div><h2>Temperatures</h2></div>
+        <div class="timestamp" id="updatedAt">—</div>
+      </div>
+      <div id="temps" class="temp-grid"><div class="empty">Scanning sensors…</div></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div><div class="eyebrow">FAN ARRAY</div><h2>Fans & PWM channels</h2></div>
+        <button class="ghost" id="refreshBtn">Refresh now</button>
+      </div>
+      <div id="fans" class="fan-grid"><div class="empty">Scanning hwmon…</div></div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
