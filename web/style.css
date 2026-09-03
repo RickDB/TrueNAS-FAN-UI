@@ -141,3 +141,10 @@ input[type=range] { width:100%; accent-color:var(--accent); }
   .control-actions { align-items:flex-start; flex-direction:column; }
   .fan-action-group { justify-content:flex-start; }
 }
+
+
+/* CPU-aware thermal labels can contain control-offset context. */
+.temp-chip {
+  line-height: 1.35;
+  white-space: normal;
+}

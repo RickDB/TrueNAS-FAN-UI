@@ -6,6 +6,25 @@ Control your fans. Keep your disks cool.
 A small Go web application for TrueNAS SCALE that monitors Linux `hwmon` fan RPM/temperatures and controls writable PWM channels through sysfs. No IPMI/BMC is used.
 
 
+
+
+## Version 0.2.2
+
+- Adds AMD Ryzen Threadripper 1920X-aware temperature handling.
+- Detects the host CPU model from `/proc/cpuinfo`.
+- Treats `k10temp` `Tctl` correctly as a control temperature with the 1920X's +27°C offset.
+- Uses kernel-provided `Tdie` when present. If `Tdie` is not exported, the UI derives `Tdie = Tctl - 27°C` and labels it as corrected.
+- Raw `Tctl` no longer wins the "Highest temperature" tile or triggers a false high-temperature border.
+- `Tccd*` remains a separate CCD reading and uses an 85°C CPU warning threshold.
+- HDD `drivetemp` cards warn at 50°C and NVMe at 70°C.
+- Includes all v0.2.1 fan ordering and v0.2.0 slider-state fixes.
+
+## Version 0.2.1
+
+- Controllable PWM fans are now listed first.
+- Monitor-only/non-controllable fans are automatically moved to the end of the fan array.
+- Existing ordering within each group remains stable by chip name and channel number.
+
 ## Version 0.2.0
 
 - Fixes custom PWM sliders snapping back during the 2-second telemetry refresh.

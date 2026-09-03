@@ -17,6 +17,101 @@ async function api(path, options={}) {
   if(!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
   return data;
 }
+
+function cpuThermalProfile(cpuModel='') {
+  const model=String(cpuModel);
+  if(/AMD Ryzen Threadripper 1920X\b/i.test(model)) {
+    return {
+      name:'Threadripper 1920X',
+      tctlOffset:27,
+      cpuWarn:85
+    };
+  }
+  return null;
+}
+
+function normaliseTemperatures(temps, cpuModel='') {
+  const profile=cpuThermalProfile(cpuModel);
+  if(!profile) {
+    return temps.map(t=>({
+      ...t,
+      display_label:t.label,
+      display_chip:t.chip,
+      physical:true,
+      warning_threshold:
+        String(t.chip).toLowerCase()==='drivetemp' ? 50 :
+        String(t.chip).toLowerCase()==='nvme' ? 70 : 70
+    }));
+  }
+
+  const isK10=t=>String(t.chip).toLowerCase()==='k10temp';
+  const realTdie=temps.filter(t=>isK10(t) && /^Tdie$/i.test(String(t.label)));
+  const out=[];
+
+  for(const t of temps) {
+    if(isK10(t) && /^Tctl$/i.test(String(t.label))) {
+      // Linux k10temp intentionally reports Tctl with a +27 C control offset
+      // on first-generation Threadripper 19xxX. If the kernel also exports
+      // Tdie, use that real sensor and keep Tctl out of physical comparisons.
+      if(realTdie.length) {
+        continue;
+      }
+
+      const corrected=t.celsius-profile.tctlOffset;
+      out.push({
+        ...t,
+        label:'Tdie',
+        display_label:'CPU Tdie',
+        display_chip:`k10temp · corrected from Tctl ${t.celsius.toFixed(1)}° (+${profile.tctlOffset}° control offset)`,
+        celsius:corrected,
+        physical:true,
+        derived:true,
+        warning_threshold:profile.cpuWarn
+      });
+      continue;
+    }
+
+    if(isK10(t) && /^Tdie$/i.test(String(t.label))) {
+      out.push({
+        ...t,
+        display_label:'CPU Tdie',
+        display_chip:'k10temp · physical die temperature',
+        physical:true,
+        warning_threshold:profile.cpuWarn
+      });
+      continue;
+    }
+
+    if(isK10(t) && /^Tccd\d+$/i.test(String(t.label))) {
+      out.push({
+        ...t,
+        display_label:t.label.replace(/^Tccd/i,'CCD '),
+        display_chip:'k10temp · CCD sensor',
+        physical:true,
+        warning_threshold:profile.cpuWarn
+      });
+      continue;
+    }
+
+    out.push({
+      ...t,
+      display_label:t.label,
+      display_chip:t.chip,
+      physical:true,
+      warning_threshold:
+        String(t.chip).toLowerCase()==='drivetemp' ? 50 :
+        String(t.chip).toLowerCase()==='nvme' ? 70 : 70
+    });
+  }
+
+  return out;
+}
+
+function tempIsHot(t) {
+  const threshold=Number.isFinite(t.warning_threshold) ? t.warning_threshold : 70;
+  return t.physical!==false && t.celsius>=threshold;
+}
+
 function modeLabel(v) {
   if(v===0) return 'disabled / full';
   if(v===1) return 'manual';
@@ -67,25 +162,35 @@ function fanCard(f, minPercent) {
 }
 function render(data) {
   last=data;
-  const fans=data.fans || [], temps=data.temperatures || [];
+  const fans=data.fans || [], rawTemps=data.temperatures || [];
+  const temps=normaliseTemperatures(rawTemps,data.cpu_model || '');
   $('#fanCount').textContent=fans.length;
   $('#writableCount').textContent=`${fans.filter(f=>f.writable).length} controllable`;
   $('#minPercent').textContent=data.min_percent;
   $('#activeProfile').textContent=data.last_profile || 'Manual';
   const rpms=fans.map(f=>f.rpm).filter(v=>Number.isFinite(v));
   $('#avgRpm').textContent=rpms.length?Math.round(rpms.reduce((a,b)=>a+b,0)/rpms.length):'—';
-  const hottest=temps.slice().sort((a,b)=>b.celsius-a.celsius)[0];
+  const hottest=temps.filter(t=>t.physical!==false).slice().sort((a,b)=>b.celsius-a.celsius)[0];
   $('#maxTemp').textContent=hottest?hottest.celsius.toFixed(1):'—';
-  $('#maxTempLabel').textContent=hottest?`${hottest.label} · ${hottest.chip}`:'No temperature sensors';
+  $('#maxTempLabel').textContent=hottest?`${hottest.display_label || hottest.label} · ${hottest.display_chip || hottest.chip}`:'No temperature sensors';
   $('#updatedAt').textContent=`Updated ${new Date(data.now).toLocaleTimeString()}`;
 
   const focusedName=document.activeElement?.dataset?.fanName;
   const oldValue=focusedName?document.activeElement.value:null;
-  fansEl.innerHTML=fans.length?fans.map(f=>fanCard(f,data.min_percent)).join(''):'<div class="empty">No fan or PWM channels exposed through hwmon.</div>';
+  const sortedFans=fans.slice().sort((a,b)=>{
+    if(a.writable !== b.writable) return a.writable ? -1 : 1;
+    if(a.chip !== b.chip) return String(a.chip).localeCompare(String(b.chip));
+    return (a.index ?? 0) - (b.index ?? 0);
+  });
+  fansEl.innerHTML=sortedFans.length?sortedFans.map(f=>fanCard(f,data.min_percent)).join(''):'<div class="empty">No fan or PWM channels exposed through hwmon.</div>';
   if(focusedName){ const el=document.querySelector(`[data-fan-name="${focusedName}"]`); if(el){el.value=oldValue;el.focus();el.setSelectionRange(el.value.length,el.value.length);} }
 
   const sortedTemps=temps.slice().sort((a,b)=>b.celsius-a.celsius);
-  tempsEl.innerHTML=sortedTemps.length?sortedTemps.map(t=>`<article class="temp-card ${t.celsius>=70?'hot':''}"><div class="temp-name">${esc(t.label)}</div><div class="temp-value">${t.celsius.toFixed(1)}°</div><div class="temp-chip">${esc(t.chip)}</div></article>`).join(''):'<div class="empty">No hwmon temperatures found.</div>';
+  tempsEl.innerHTML=sortedTemps.length?sortedTemps.map(t=>`<article class="temp-card ${tempIsHot(t)?'hot':''}">
+    <div class="temp-name">${esc(t.display_label || t.label)}</div>
+    <div class="temp-value">${t.celsius.toFixed(1)}°</div>
+    <div class="temp-chip">${esc(t.display_chip || t.chip)}</div>
+  </article>`).join(''):'<div class="empty">No hwmon temperatures found.</div>';
 
   const profiles=Object.entries(data.profiles||{}).sort((a,b)=>a[1]-b[1]);
   $('#profiles').innerHTML=profiles.map(([n,p])=>`<button class="profile-btn ${data.last_profile===n?'active':''}" data-profile="${esc(n)}"><strong>${esc(n)}</strong><span>${p}% PWM</span></button>`).join('');

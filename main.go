@@ -25,7 +25,29 @@ type apiStatus struct {
 	Profiles    map[string]int `json:"profiles"`
 	LastProfile string         `json:"last_profile"`
 	MinPercent  int            `json:"min_percent"`
+	CPUModel    string         `json:"cpu_model,omitempty"`
 	Now         time.Time      `json:"now"`
+}
+
+
+func detectCPUModel() string {
+	b, err := os.ReadFile("/proc/cpuinfo")
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(strings.ToLower(parts[0]))
+		if key == "model name" || key == "hardware" {
+			if model := strings.TrimSpace(parts[1]); model != "" {
+				return model
+			}
+		}
+	}
+	return ""
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -54,7 +76,14 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := a.cfg.Snapshot()
-	writeJSON(w, 200, apiStatus{Snapshot: snap, Profiles: cfg.Profiles, LastProfile: cfg.LastProfile, MinPercent: cfg.MinPercent, Now: time.Now()})
+	writeJSON(w, 200, apiStatus{
+		Snapshot:    snap,
+		Profiles:    cfg.Profiles,
+		LastProfile: cfg.LastProfile,
+		MinPercent:  cfg.MinPercent,
+		CPUModel:    detectCPUModel(),
+		Now:         time.Now(),
+	})
 }
 
 func (a *App) setName(w http.ResponseWriter, r *http.Request) {
