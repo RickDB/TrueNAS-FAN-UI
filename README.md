@@ -5,6 +5,14 @@ Control your fans. Keep your disks cool.
 
 A small Go web application for TrueNAS SCALE that monitors Linux `hwmon` fan RPM/temperatures and controls writable PWM channels through sysfs. No IPMI/BMC is used.
 
+
+## Version 0.2.0
+
+- Fixes custom PWM sliders snapping back during the 2-second telemetry refresh.
+- Unsaved slider edits now remain local until **Apply & save** is pressed.
+- Live PWM/RPM telemetry continues updating independently.
+- Includes Only Fans - TrueNAS Edition branding, IT87 runtime loader, per-fan saved profiles and per-fan startup restore.
+
 ## Features
 
 - Auto-discovers `/sys/class/hwmon/hwmon*`

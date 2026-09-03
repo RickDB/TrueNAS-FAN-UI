@@ -4,6 +4,7 @@ const tempsEl = $('#temps');
 let last = null;
 let refreshTimer = null;
 let toastTimer = null;
+const pendingPWM = new Map();
 
 function esc(v='') { return String(v).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 function showToast(msg, error=false) {
@@ -27,7 +28,9 @@ function fanCard(f, minPercent) {
   const rpm=f.rpm ?? null;
   const pct=f.percent ?? null;
   const mode=modeLabel(f.pwm_mode);
-  const slider=f.custom_percent ?? pct ?? minPercent;
+  const slider = pendingPWM.has(f.id)
+    ? pendingPWM.get(f.id)
+    : (f.custom_percent ?? pct ?? minPercent);
   return `<article class="fan-card ${rpm===0?'offline':''}" data-fan-card="${f.id}">
     <div class="fan-top">
       <div><div class="fan-name" data-name-label="${f.id}">${esc(f.name)}</div><div class="fan-meta">${esc(f.chip)} · channel ${f.index}<br>${esc(f.device)}</div></div>
@@ -94,7 +97,14 @@ async function refresh(silent=false){
 }
 
 document.addEventListener('input', e=>{
-  if(e.target.matches('[data-pwm-slider]')) document.querySelector(`[data-slider-value="${e.target.dataset.pwmSlider}"]`).textContent=e.target.value;
+  if(!e.target.matches('[data-pwm-slider]')) return;
+
+  const id=e.target.dataset.pwmSlider;
+  const value=Number(e.target.value);
+  pendingPWM.set(id,value);
+
+  const label=document.querySelector(`[data-slider-value="${id}"]`);
+  if(label) label.textContent=value;
 });
 document.addEventListener('click', async e=>{
   const save=e.target.closest('[data-save-name]');
@@ -108,13 +118,16 @@ document.addEventListener('click', async e=>{
       const id=saveProfile.dataset.saveProfile;
       const slider=document.querySelector(`[data-pwm-slider="${id}"]`);
       const startup=document.querySelector(`[data-startup-profile="${id}"]`);
-      await api(`/api/fans/${id}/profile`,{method:'POST',body:JSON.stringify({percent:Number(slider.value),restore_on_startup:startup.checked,apply_now:true})});
-      showToast(`Custom profile saved at ${slider.value}%`);
+      const savedPercent=Number(slider.value);
+      await api(`/api/fans/${id}/profile`,{method:'POST',body:JSON.stringify({percent:savedPercent,restore_on_startup:startup.checked,apply_now:true})});
+      pendingPWM.delete(id);
+      showToast(`Custom profile saved at ${savedPercent}%`);
       await refresh(true);
     }
     if(clearProfile){
       const id=clearProfile.dataset.clearProfile;
       await api(`/api/fans/${id}/profile`,{method:'DELETE',body:'{}'});
+      pendingPWM.delete(id);
       showToast('Saved custom profile cleared');
       await refresh(true);
     }
