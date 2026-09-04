@@ -23,6 +23,31 @@ if [ ! -e "${BUILD_DIR}/Makefile" ]; then
     exit 1
 fi
 
+
+ensure_hwmon_vid() {
+    # frankcrawford/it87 uses vid_from_reg() and vid_which_vrm(), which are
+    # exported by the host kernel's hwmon-vid module. A clean TrueNAS boot
+    # may not have that dependency loaded yet, so load it before insmod.
+    if grep -Eq '^hwmon[_-]vid ' /proc/modules 2>/dev/null; then
+        log "dependency hwmon-vid is already loaded"
+        return 0
+    fi
+
+    log "loading dependency: hwmon-vid"
+    if modprobe hwmon-vid 2>/dev/null || modprobe hwmon_vid 2>/dev/null; then
+        log "dependency hwmon-vid loaded"
+        return 0
+    fi
+
+    log "ERROR: unable to load host kernel module hwmon-vid"
+    log "it87 requires the exported symbols vid_from_reg and vid_which_vrm."
+    log "Available module candidate(s):"
+    find "/lib/modules/${KERNEL}" -type f \
+        \( -name 'hwmon-vid.ko*' -o -name 'hwmon_vid.ko*' \) \
+        -print 2>/dev/null || true
+    return 1
+}
+
 ite_hwmon_present() {
     for hw in /sys/class/hwmon/hwmon*; do
         [ -r "${hw}/name" ] || continue
@@ -69,6 +94,11 @@ else
 fi
 
 log "module vermagic: $(modinfo -F vermagic "${CACHE_MODULE}" 2>/dev/null || printf unknown)"
+
+if ! ensure_hwmon_vid; then
+    dmesg 2>/dev/null | tail -40 || true
+    exit 1
+fi
 
 log "loading it87 (ignore_resource_conflict=${IGNORE_CONFLICT})"
 if ! insmod "${CACHE_MODULE}" "ignore_resource_conflict=${IGNORE_CONFLICT}"; then

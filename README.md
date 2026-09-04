@@ -8,6 +8,15 @@ A small Go web application for TrueNAS SCALE that monitors Linux `hwmon` fan RPM
 
 
 
+
+## Version 0.2.3
+
+- Fixes IT87 failing after a clean TrueNAS reboot with `Unknown symbol vid_from_reg` / `vid_which_vrm`.
+- The `it87-loader` container now automatically loads the host kernel `hwmon-vid` dependency before inserting `it87.ko`.
+- No host-side `modprobe hwmon-vid` command is required after reboot.
+- The loader health check now requires both the `it87` module and an actual `it86*`/`it87*` hwmon device.
+- The main UI now waits for the IT87 loader to become healthy before starting.
+
 ## Version 0.2.2
 
 - Adds AMD Ryzen Threadripper 1920X-aware temperature handling.
